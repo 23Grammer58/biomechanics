@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/stend.iml" filepath="$PROJECT_DIR$/.idea/stend.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/biomechanics.iml" filepath="$PROJECT_DIR$/.idea/biomechanics.iml" />
     </modules>
   </component>
 </project>
