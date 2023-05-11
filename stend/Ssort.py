@@ -9,6 +9,7 @@ import numpy as np
 from PIL import Image
 import logging
 import cv2 as cv
+import csv
 
 
 ################ FIND CHESSBOARD CORNERS - OBJECT POINTS AND IMAGE POINTS #############################
@@ -19,16 +20,14 @@ class NumpyEncoder(json.JSONEncoder):
             return obj.tolist()
         return json.JSONEncoder.default(self, obj)
 
-def calibration_params(name_protocol):
+def calibration_params(name_protocol,path):
     start = timeit.default_timer()
     calib_params = {}
     chessboardSize = (15,8)
     frameSize = (4096,3000)
 
-
     # termination criteria
     criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-
 
     # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
     objp = np.zeros((chessboardSize[0] * chessboardSize[1], 3), np.float32)
@@ -36,7 +35,6 @@ def calibration_params(name_protocol):
 
     size_of_chessboard_squares_mm = 5
     objp = objp * size_of_chessboard_squares_mm
-
 
     # Arrays to store object points and image points from all the images.
     objpoints = [] # 3d point in real world space
@@ -65,10 +63,7 @@ def calibration_params(name_protocol):
             #cv.imshow('img', img)
             #cv.waitKey(1000)
 
-
     cv.destroyAllWindows()
-
-
 
     # print(imgpoints)
     ############## CALIBRATION #######################################################
@@ -86,21 +81,22 @@ def calibration_params(name_protocol):
     calib_params['Rotation_Vectors'] = rvecs
     calib_params['Translation_Vectors'] = tvecs
     json_calib_params = json.dumps(calib_params, indent = 4, cls=NumpyEncoder)
-    with open(f'{name_protocol}.json', 'w') as outfile:
+    with open(f'{os.path.join(path,name_protocol)}.json', 'w') as outfile:
         outfile.write(json_calib_params)
         # json.dump(json_calib_params, outfile)
     end = timeit.default_timer()
     print(f'Parameter calibration time:{end - start}')
     return calib_params
 
+
 class Sort:
     def __init__(self,path:str,name_protocol:str, calib_params: dict,look_image_list = []):
         self.path = path
-        self.paths = self.__sort_in_folder()
         self.name_protocol = name_protocol
-        self.calibration_params = calib_params
-        self.data = {}
         self.look_images_list = look_image_list
+        self.calibration_params = calib_params
+        self.paths = self.__sort_in_folder()
+        self.data = {}
 
     def __sort_by(self,file: str) -> int:
         return int(re.search(r'\d{3,}', file)[0])
@@ -115,11 +111,11 @@ class Sort:
         }
 
         for extension, folder_image in extensions.items():
-            files = glob.glob(os.path.join(self.path, f"*.{extension}"))
+            files = glob.glob(os.path.join(self.path, fr"*^{self.name_protocol}.{extension}"))
             print(f"[*] Найдено {len(files)} Файлов с раширением {extension}.")
 
             if not os.path.isdir(os.path.join(self.path, folder_image)):
-                print(folder_image)
+                # print(folder_image)
                 os.mkdir(os.path.join(self.path, folder_image))
                 print(f"[+] Создана папка {folder_image}.")
             folder_location = os.path.join(self.path, folder_image)
@@ -135,10 +131,10 @@ class Sort:
         return paths
 
     def write_json_to_dictionary(self):
-        logging.basicConfig(level=logging.INFO,filename=f"{self.name_protocol}.log", filemode="w",
+        logging.basicConfig(level=logging.INFO,filename=f"{os.path.join(path,name_protocol)}.log", filemode="w",
                             format="%(asctime)s %(levelname)s %(message)s")
         logging.info(f'Name protocol \'{self.name_protocol}\'')
-        print(self.paths)
+        # print(self.paths)
         path_Indication = self.paths[1]
         list_json = sorted(os.listdir(path_Indication))
         all_json = {}
@@ -150,13 +146,13 @@ class Sort:
                     try:
                         dictionary_string = eval(json.load(f))
                     except SyntaxError as err:
-                        logging.error(f"неправильно записан фрейм {id}")
+                        logging.error(f"writing error frame {id}")
                         id += 1
                         continue
                     try:
-                        value_key = dictionary_string[f'{id}']
+                        value_key = dictionary_string[fr'{id}']
                     except KeyError as err:
-                        logging.error(f"пропущен фрейм {id}")
+                        logging.error(f"frame skipped {id}")
                         id += 1
                         continue
 
@@ -221,6 +217,18 @@ class Sort:
         self.data['tenzo_3'] = tenzo_3
         self.data['mean_tenzo_0_2'] = mean_tenzo_0_2
         self.data['mean_tenzo_1_3'] = mean_tenzo_1_3
+        with open(fr'{os.path.join(path,name_protocol)}.csv', 'w', newline='') as csvfile:
+            fieldnames = list(self.data.keys())
+            writer = csv.DictWriter(csvfile,fieldnames = fieldnames)
+            writer.writeheader()
+            for i in range(len(self.data['frame_x'])):
+                row = {}
+                for key in self.data:
+                    # print(key)
+                    row[key] = self.data[key][i]
+                # print(row)
+                writer.writerow(row)
+
 
     def look(self,frame, index:int):
         npy = np.load(frame)  # read npy
@@ -353,14 +361,14 @@ class Sort:
 if __name__ == "__main__":
     path = '/home/ali/Desktop/НИР/test/testtest/cal3'
     name_protocol = 'test'
-    look_images = [2,100,200]
+    look_images = []
     start_main = timeit.default_timer()
     if len(look_images) > 0:
-        t = Sort(path,name_protocol,calibration_params(name_protocol),look_images)
+        t = Sort(path,name_protocol,calibration_params(name_protocol,path),look_images)
     else:
-        t = Sort(path, name_protocol, calibration_params(name_protocol))
+        t = Sort(path, name_protocol, calibration_params(name_protocol,path))
     t.write_json_to_dictionary()
-    t.main_function()
-    t.draw_plot()
+    # t.main_function()
+    # t.draw_plot()
     end_main = timeit.default_timer()
     print(f'Program running time:{(end_main - start_main)//60} : {(end_main - start_main) % 60}')
