@@ -182,12 +182,13 @@ class Sort:
             value_axis_3 = value_axis_1_3[1]
             sum_0_2 = round(value_axis_0 + value_axis_2, 2)
             sum_1_3 = round(value_axis_1 + value_axis_3, 2)
-            tenzo_0.append(value_tenzo[0])
-            tenzo_1.append(value_tenzo[1])
-            tenzo_2.append(value_tenzo[2])
-            tenzo_3.append(value_tenzo[3])
-            mean_tenzo_0_2.append((value_tenzo[0] + value_tenzo[2]) / 2)
-            mean_tenzo_1_3.append((value_tenzo[1] + value_tenzo[3]) / 2)
+            # print(value_tenzo)
+            tenzo_0.append(abs(value_tenzo[0]))
+            tenzo_1.append(abs(value_tenzo[1]))
+            tenzo_2.append(abs(value_tenzo[2]))
+            tenzo_3.append(abs(value_tenzo[3]))
+            mean_tenzo_0_2.append((abs(value_tenzo[0]) + abs(value_tenzo[2])) / 2)
+            mean_tenzo_1_3.append((abs(value_tenzo[1]) + abs(value_tenzo[3])) / 2)
 
             if id == 0:
                 axis_0_2.append(sum_0_2)
@@ -208,6 +209,12 @@ class Sort:
         # print("1:",value_axis_1)
         # print("2:",value_axis_2)
         # print("3:",value_axis_3)
+        for i in range(len(mean_tenzo_0_2)):
+            if mean_tenzo_0_2[i] > 0.8:
+                mean_tenzo_0_2[i] = (mean_tenzo_0_2[i - 1] + mean_tenzo_0_2[i + 1]) / 2
+            if mean_tenzo_1_3[i] > 0.8:
+                mean_tenzo_1_3[i] = (mean_tenzo_1_3[i - 1] + mean_tenzo_1_3[i + 1]) / 2
+
         self.data['frame_x'] = frame_x
         self.data['axis_0_2'] = axis_0_2
         self.data['axis_1_3'] = axis_1_3
@@ -215,8 +222,11 @@ class Sort:
         self.data['tenzo_1'] = tenzo_1
         self.data['tenzo_2'] = tenzo_2
         self.data['tenzo_3'] = tenzo_3
-        self.data['mean_tenzo_0_2'] = mean_tenzo_0_2
-        self.data['mean_tenzo_1_3'] = mean_tenzo_1_3
+        self.data['Force_0_2'] = mean_tenzo_0_2
+        self.data['Force_1_3'] = mean_tenzo_1_3
+        self.data['correlation_force_0_2'] = np.array(mean_tenzo_0_2) * 0.96713
+        self.data['correlation_force_1_3'] = np.array(mean_tenzo_1_3) * 0.88
+
         with open(fr'{os.path.join(path,name_protocol)}.csv', 'w', newline='') as csvfile:
             fieldnames = list(self.data.keys())
             writer = csv.DictWriter(csvfile,fieldnames = fieldnames)
@@ -325,11 +335,14 @@ class Sort:
     #
 
     def draw_plot(self,):
-        x = self.data.get('frame_x')
-        y = self.data.get('axis_0_2')
+        x = self.data.get('axis_0_2')[:200]
+        y = self.data.get('Force_0_2')[:200]
+        # print('x',len(x))
+        # print('y',y)
         fig, ax = plt.subplots(figsize=(150, 30), dpi=150)
+        plt.ylim(0,0.3)
         plt.plot(x, y)
-        plt.scatter(x, y)
+        # plt.scatter(x, y)
         plt.xticks(x[::5], rotation=45)
         # plt.stem(frame_x,tenzo_3)
         # for row in tenzo_3:
@@ -359,7 +372,7 @@ class Sort:
 
 
 if __name__ == "__main__":
-    path = '/home/ali/Desktop/НИР/test/testtest/cal3'
+    path = '/home/ali/Desktop/test'
     name_protocol = 'test'
     look_images = []
     start_main = timeit.default_timer()
@@ -369,6 +382,6 @@ if __name__ == "__main__":
         t = Sort(path, name_protocol, calibration_params(name_protocol,path))
     t.write_json_to_dictionary()
     # t.main_function()
-    # t.draw_plot()
+    t.draw_plot()
     end_main = timeit.default_timer()
     print(f'Program running time:{(end_main - start_main)//60} : {(end_main - start_main) % 60}')
