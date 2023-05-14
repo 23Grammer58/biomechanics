@@ -53,7 +53,6 @@ def calibration_params(name_protocol,path):
 
         # If found, add object points, image points (after refining them)
         if ret == True:
-
             objpoints.append(objp)
             corners2 = cv.cornerSubPix(gray, corners, (11,11), (-1,-1), criteria)
             imgpoints.append(corners)
@@ -109,25 +108,27 @@ class Sort:
             "tif": "Images",
             " ": "Grayscale"
         }
-
+        p_json=glob.glob(os.path.join(self.path, fr"{self.name_protocol}.json"))[0]
         for extension, folder_image in extensions.items():
-            files = glob.glob(os.path.join(self.path, fr"*^{self.name_protocol}.{extension}"))
+            files = glob.glob(os.path.join(self.path, fr"*.{extension}"))
             print(f"[*] Найдено {len(files)} Файлов с раширением {extension}.")
-
             if not os.path.isdir(os.path.join(self.path, folder_image)):
                 # print(folder_image)
                 os.mkdir(os.path.join(self.path, folder_image))
                 print(f"[+] Создана папка {folder_image}.")
             folder_location = os.path.join(self.path, folder_image)
-
+            paths.append(folder_location)
 
             for file in files:
-                nowlocation = os.path.basename(file)
-                dst = os.path.join(self.path, folder_image, nowlocation)
-                print(f"[*] Перенесен файл '{file}' в {dst}")
+                if file != p_json:
+                # if file in p_json:
+                #     print(file)
+                    # continue
+                    nowlocation = os.path.basename(file)
+                    dst = os.path.join(self.path, folder_image, nowlocation)
+                    print(f"[*] Перенесен файл '{file}' в {dst}")
                 # print(dst)
-                shutil.move(file, dst)
-            paths.append(folder_location)
+                    shutil.move(file, dst)
         return paths
 
     def write_json_to_dictionary(self):
@@ -239,7 +240,6 @@ class Sort:
                 # print(row)
                 writer.writerow(row)
 
-
     def look(self,frame, index:int):
         npy = np.load(frame)  # read npy
         # npy = cv2.cvtColor(npy, cv2.COLOR_BGR2RGB)
@@ -307,9 +307,10 @@ class Sort:
                 os.mkdir(os.path.join(path, folder_images))
             folder_location_image = os.path.join(path, folder_images)
 
-
         frame = np.average(frame, axis=2, weights = [0.144, 0.587, 0.299])
         frame = frame.astype(np.uint8)
+        print(self.paths)
+
         np.save(f'{self.paths[3]}/{index}', frame)
 
         if look_image:
@@ -361,10 +362,10 @@ class Sort:
             # img = np.load(frame)
             # print()
             look_image = False
+            calib_npy = self.calibration_image(frame,index,look_image)
             if index in self.look_images_list:
                 look_image = True
                 self.look(frame,index)
-            calib_npy = self.calibration_image(frame,index,look_image)
             self.conversion_to_grayscale(calib_npy,index,look_image)
             os.remove(f'{frame}')
             index += 1
@@ -372,7 +373,7 @@ class Sort:
 
 
 if __name__ == "__main__":
-    path = '/home/ali/Desktop/test'
+    path = '/home/ali/Desktop/tttt/cal3'
     name_protocol = 'test'
     look_images = []
     start_main = timeit.default_timer()
@@ -381,7 +382,7 @@ if __name__ == "__main__":
     else:
         t = Sort(path, name_protocol, calibration_params(name_protocol,path))
     t.write_json_to_dictionary()
-    # t.main_function()
-    t.draw_plot()
+    t.main_function()
+    # t.draw_plot()
     end_main = timeit.default_timer()
     print(f'Program running time:{(end_main - start_main)//60} : {(end_main - start_main) % 60}')
