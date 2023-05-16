@@ -11,16 +11,26 @@ import logging
 import cv2 as cv
 import csv
 
-
 ################ FIND CHESSBOARD CORNERS - OBJECT POINTS AND IMAGE POINTS #############################
 
 class NumpyEncoder(json.JSONEncoder):
+    '''
+    Класс для  записи в json, его лучше не трогать
+    '''
     def default(self, obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         return json.JSONEncoder.default(self, obj)
 
+
 def calibration_params(name_protocol,path):
+    '''
+    тут происходит калибровка параметров камеры и запись в json по имени протокал
+    в json запишем
+    :param name_protocol:
+    :param path:
+    :return:
+    '''
     start = timeit.default_timer()
     calib_params = {}
     chessboardSize = (15,8)
@@ -83,13 +93,14 @@ def calibration_params(name_protocol,path):
     with open(f'{os.path.join(path,name_protocol)}.json', 'w') as outfile:
         outfile.write(json_calib_params)
         # json.dump(json_calib_params, outfile)
+        print(fr'json c параметрами калибровки сохранен в {os.path.join(path,name_protocol)}')
     end = timeit.default_timer()
     print(f'Parameter calibration time:{end - start}')
     return calib_params
 
 
 class Sort:
-    def __init__(self,path:str,name_protocol:str, calib_params: dict,look_image_list = []):
+    def __init__(self,path:str,name_protocol:str, calib_params:dict,look_image_list = []):
         self.path = path
         self.name_protocol = name_protocol
         self.look_images_list = look_image_list
@@ -97,9 +108,18 @@ class Sort:
         self.paths = self.__sort_in_folder()
         self.data = {}
 
+
     def __sort_by(self,file: str) -> int:
+        '''
+        функция для сортировки при считывания файлов
+        '''
         return int(re.search(r'\d{3,}', file)[0])
     def __sort_in_folder(self):
+
+        '''
+        функция для создания папочек и сортировки файлов по ним
+        '''
+
         paths = []  # add paths all to folders
 
         extensions = {
@@ -132,6 +152,11 @@ class Sort:
         return paths
 
     def write_json_to_dictionary(self):
+        '''
+        парсинг json
+        считывание ошибок и запись в логгер
+        запись в csv
+        '''
         logging.basicConfig(level=logging.INFO,filename=f"{os.path.join(path,name_protocol)}.log", filemode="w",
                             format="%(asctime)s %(levelname)s %(message)s")
         logging.info(f'Name protocol \'{self.name_protocol}\'')
@@ -156,7 +181,6 @@ class Sort:
                         logging.error(f"frame skipped {id}")
                         id += 1
                         continue
-
                     all_json[f"{id}"] = value_key
                     id += 1
         # return all_json
@@ -210,11 +234,13 @@ class Sort:
         # print("1:",value_axis_1)
         # print("2:",value_axis_2)
         # print("3:",value_axis_3)
-        for i in range(len(mean_tenzo_0_2)):
-            if mean_tenzo_0_2[i] > 0.8:
-                mean_tenzo_0_2[i] = (mean_tenzo_0_2[i - 1] + mean_tenzo_0_2[i + 1]) / 2
-            if mean_tenzo_1_3[i] > 0.8:
-                mean_tenzo_1_3[i] = (mean_tenzo_1_3[i - 1] + mean_tenzo_1_3[i + 1]) / 2
+        #-----------------------'полнешйий костыль для калибровки'------------------------------------
+        # for i in range(len(mean_tenzo_0_2)):
+        #     if mean_tenzo_0_2[i] > 0.8:
+        #         mean_tenzo_0_2[i] = (mean_tenzo_0_2[i - 1] + mean_tenzo_0_2[i + 1]) / 2
+        #     if mean_tenzo_1_3[i] > 0.8:
+        #         mean_tenzo_1_3[i] = (mean_tenzo_1_3[i - 1] + mean_tenzo_1_3[i + 1]) / 2
+        #---------------------------------------------------------------------------
 
         self.data['frame_x'] = frame_x
         self.data['axis_0_2'] = axis_0_2
@@ -228,7 +254,7 @@ class Sort:
         self.data['correlation_force_0_2'] = np.array(mean_tenzo_0_2) * 0.96713
         self.data['correlation_force_1_3'] = np.array(mean_tenzo_1_3) * 0.88
 
-        with open(fr'{os.path.join(path,name_protocol)}.csv', 'w', newline='') as csvfile:
+        with open(fr'{os.path.join(self.path,self.name_protocol)}.csv', 'w', newline='') as csvfile:
             fieldnames = list(self.data.keys())
             writer = csv.DictWriter(csvfile,fieldnames = fieldnames)
             writer.writeheader()
@@ -239,14 +265,23 @@ class Sort:
                     row[key] = self.data[key][i]
                 # print(row)
                 writer.writerow(row)
+        print(fr'создан csv файл {os.path.join(self.path,self.name_protocol)}.csv')
+        print(fr'создан logger {os.path.join(self.path, self.name_protocol)}.log')
 
     def look(self,frame, index:int):
+        '''
+        функция  для просмтора изображений если двруг захотим
+        '''
         npy = np.load(frame)  # read npy
         # npy = cv2.cvtColor(npy, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(npy)
         img.save(f"{self.paths[2]}/{index}.tif")  # transfer from npy to tif
 
     def calibration_image(self,frame, index:int,look_image = False ):
+        '''
+        калибровка изображения по калибровочным пармаетрам  и возможно сохранение при желании
+        '''
+
         folder_images = 'Calibration_images'
         if look_image:
             if not os.path.isdir(os.path.join(path, folder_images)):
@@ -288,7 +323,6 @@ class Sort:
         end = timeit.default_timer()
         print(f"Time taken is colibration image {end - start}s")
         return dst
-
     # Reprojection Error
         mean_error = 0
 
@@ -300,7 +334,9 @@ class Sort:
         print( "total error: {}".format(mean_error/len(objpoints)) )
 
     def conversion_to_grayscale(self,frame, index:int, look_image = False):
-        # folder_npy = 'grayscale_npy'
+        '''
+        перевод изображения в градации серого  и сохранепия при желании
+        '''
         folder_images = 'grayscale_image'
         if look_image:
             if not os.path.isdir(os.path.join(path, folder_images)):
@@ -336,6 +372,9 @@ class Sort:
     #
 
     def draw_plot(self,):
+        '''
+        тут можно порисовать всякие графики, позже  поприкольнее сделаю
+        '''
         x = self.data.get('axis_0_2')[:200]
         y = self.data.get('Force_0_2')[:200]
         # print('x',len(x))
@@ -354,6 +393,11 @@ class Sort:
         plt.show()
 
     def main_function(self,):
+        '''
+        тут калибровка и перевод в градации серого, беря каждый элемент из папки в которую мы отсортировали выше и удаление первоначальных фреймов для оптимизации по памяти
+        '''
+        if self.calibration_params == None:
+            return (print("Нет калибровочных параметров "))
         frames_path = glob.glob(f'{self.paths[0]}/*.npy')  # path to npy
         frames_path.sort(key=self.__sort_by)
         index = 1
@@ -373,16 +417,24 @@ class Sort:
 
 
 if __name__ == "__main__":
-    path = '/home/ali/Desktop/tttt/cal3'
-    name_protocol = 'test'
-    look_images = []
+
+    '''
+    Главная функция 
+    тут весь движ 
+    '''
+
+    path = '/home/ali/Desktop/test' #задаем путь в нашу папочку с данными
+    name_protocol = 'test' # задаем имя нашего протокола
+    look_images = [] #  можем записать номера изображений которые хотим глянуть
     start_main = timeit.default_timer()
+    calibration_param = None
+    # calibration_param = calibration_params(name_protocol, path)# расчет калибровочных параметров, работает чуть долго, запускаем когда нам нужно иначе оставляем закоменченным
     if len(look_images) > 0:
-        t = Sort(path,name_protocol,calibration_params(name_protocol,path),look_images)
+        t = Sort(path,name_protocol,calibration_param,look_images)
     else:
-        t = Sort(path, name_protocol, calibration_params(name_protocol,path))
-    t.write_json_to_dictionary()
-    t.main_function()
-    # t.draw_plot()
-    end_main = timeit.default_timer()
+        t = Sort(path, name_protocol, calibration_param)
+    t.write_json_to_dictionary() #чтения json и запись в csv, создается также логгер с ошибками(неправильная запись,либо пропуск фремйа)
+    t.main_function()# калибрвка изображения и перевод в градации серого а также сохранение  изображений в случае если у нас массив  look_images содежит индексы фреймов
+    # t.draw_plot()# отрисовка, параметры нужно через sefl указать в классе, чуть позже напишу  нормально
+    end_main = timeit.default_timer() #замер времени
     print(f'Program running time:{(end_main - start_main)//60} : {(end_main - start_main) % 60}')
