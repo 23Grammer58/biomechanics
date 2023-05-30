@@ -13,7 +13,7 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
-
+import sys
 
 ################ FIND CHESSBOARD CORNERS - OBJECT POINTS AND IMAGE POINTS #############################
 
@@ -26,82 +26,6 @@ class NumpyEncoder(json.JSONEncoder):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         return json.JSONEncoder.default(self, obj)
-
-
-def calibration_params(name_protocol: str, path: Path, chessboardSize: tuple):
-    '''
-    тут происходит калибровка параметров камеры и запись в json по имени протокал
-    в json запишем
-    :param name_protocol: Name of protocol
-    :param path: Path where to save json
-    :return:
-    '''
-    start = timeit.default_timer()
-    calib_params = {}
-    # chessboardSize = (15,8)
-    frameSize = (4096, 3000)
-
-    # termination criteria
-    criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-
-    # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
-    objp = np.zeros((chessboardSize[0] * chessboardSize[1], 3), np.float32)
-    objp[:, :2] = np.mgrid[0:chessboardSize[0], 0:chessboardSize[1]].T.reshape(-1, 2)
-
-    size_of_chessboard_squares_mm = 5
-    objp = objp * size_of_chessboard_squares_mm
-
-    # Arrays to store object points and image points from all the images.
-    objpoints = []  # 3d point in real world space
-    imgpoints = []  # 2d points in image plane.
-
-    images = glob.glob('CalibrationOpenCV/*.jpg')
-    # print(images)
-
-    for image in images:
-        # print(image)
-        img = cv.imread(image)
-        gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-
-        # Find the chess board corners
-        ret, corners = cv.findChessboardCorners(gray, chessboardSize, None)
-
-        # If found, add object points, image points (after refining them)
-        if ret == True:
-            objpoints.append(objp)
-            corners2 = cv.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
-            imgpoints.append(corners)
-
-            # Draw and display the corners
-            cv.drawChessboardCorners(img, chessboardSize, corners2, ret)
-            # cv.imshow('img', img)
-            # cv.waitKey(1000)
-
-    cv.destroyAllWindows()
-
-    # print(imgpoints)
-    ############## CALIBRATION #######################################################
-
-    ret, cameraMatrix, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, frameSize, None, None)
-
-    # print("Camera Calibrated: ", ret)
-    # print("\nCamera Matrix:\n", cameraMatrix)
-    # print("\nDistorsion Parameters:\n", dist)
-    # print("\nRotation Vectors:\n", rvecs)
-    # print("\nTranslation Vectors:\n", tvecs)
-    calib_params['Camera_Calibrated'] = ret
-    calib_params['Camera_Matrix'] = cameraMatrix
-    calib_params['Distorsion_Parameters'] = dist
-    calib_params['Rotation_Vectors'] = rvecs
-    calib_params['Translation_Vectors'] = tvecs
-    json_calib_params = json.dumps(calib_params, indent=4, cls=NumpyEncoder)
-    with open(f'{os.path.join(path, name_protocol)}.json', 'w') as outfile:
-        outfile.write(json_calib_params)
-        # json.dump(json_calib_params, outfile)
-        print(fr'json c параметрами калибровки сохранен в {os.path.join(path, name_protocol)}')
-    end = timeit.default_timer()
-    print(f'Parameter calibration time:{end - start}')
-    return calib_params
 
 
 class Sort:
@@ -133,10 +57,7 @@ class Sort:
             "tif": "Images",
             " ": "Grayscale"
         }
-        if self.calibration_params is None:
-            p_json = None
-        else:
-            p_json = glob.glob(os.path.join(self.path, fr"{self.name_protocol}.json"))[0]
+
         for extension, folder_image in extensions.items():
             files = glob.glob(os.path.join(self.path, fr"*.{extension}"))
             print(f"[*] Найдено {len(files)} Файлов с раширением {extension}.")
@@ -148,10 +69,7 @@ class Sort:
             paths.append(folder_location)
 
             for file in files:
-                if file != p_json:
-                    # if file in p_json:
-                    #     print(file)
-                    # continue
+                if re.fullmatch(f'\d*\.\d*\.{extension}',file.split('/')[-1],) is not None or file.split('/')[-1] == 'exp_params.json' :
                     nowlocation = os.path.basename(file)
                     dst = os.path.join(self.path, folder_image, nowlocation)
                     print(f"[*] Перенесен файл '{file}' в {dst}")
@@ -165,7 +83,7 @@ class Sort:
         считывание ошибок и запись в логгер
         запись в csv
         '''
-        logging.basicConfig(level=logging.INFO, filename=f"{os.path.join(path, name_protocol)}.log", filemode="w",
+        logging.basicConfig(level=logging.INFO, filename=f"{os.path.join(self.path, self.name_protocol)}.log", filemode="w",
                             format="%(asctime)s %(levelname)s %(message)s")
         logging.info(f'Name protocol \'{self.name_protocol}\'')
         # print(self.paths)
@@ -198,15 +116,6 @@ class Sort:
         for name in names:
             self.data[name] = []
 
-        # self.data =
-        # axis_0_2 = []
-        # axis_1_3 = []
-        # tenzo_0 = []
-        # tenzo_1 = []
-        # tenzo_2 = []
-        # tenzo_3 = []
-        # mean_tenzo_0_2 = []
-        # mean_tenzo_1_3 = []
         for id, x in enumerate(all_json):
             self.data['frame'].append(x)
             value_key_x = all_json[x]
@@ -255,15 +164,6 @@ class Sort:
         #         mean_tenzo_1_3[i] = (mean_tenzo_1_3[i - 1] + mean_tenzo_1_3[i + 1]) / 2
         # ---------------------------------------------------------------------------
 
-        # self.data['frame_x'] = frame_x
-        # self.data['axis_0_2'] = axis_0_2
-        # self.data['axis_1_3'] = axis_1_3
-        # self.data['tenzo_0'] = tenzo_0
-        # self.data['tenzo_1'] = tenzo_1
-        # self.data['tenzo_2'] = tenzo_2
-        # self.data['tenzo_3'] = tenzo_3
-        # self.data['Force_0_2'] = mean_tenzo_0_2
-        # self.data['Force_1_3'] = mean_tenzo_1_3
         self.data['correlation_force_0_2'] = np.array(self.data['mean_tenzo_0_2']) * 0.96713
         self.data['correlation_force_1_3'] = np.array(self.data['mean_tenzo_1_3']) * 0.88
 
@@ -297,9 +197,9 @@ class Sort:
 
         folder_images = 'Calibration_images'
         if look_image:
-            if not os.path.isdir(os.path.join(path, folder_images)):
-                os.mkdir(os.path.join(path, folder_images))
-            folder_location_image = os.path.join(path, folder_images)
+            if not os.path.isdir(os.path.join(self.path, folder_images)):
+                os.mkdir(os.path.join(self.path, folder_images))
+            folder_location_image = os.path.join(self.path, folder_images)
         start = timeit.default_timer()
 
         # start = timeit.default_timer()
@@ -342,14 +242,14 @@ class Sort:
         print(f"Time taken is colibration image {end - start}s")
         return dst
         # Reprojection Error
-        mean_error = 0
-
-        for i in range(len(objpoints)):
-            imgpoints2, _ = cv.projectPoints(objpoints[i], rvecs[i], tvecs[i], cameraMatrix, dist)
-            error = cv.norm(imgpoints[i], imgpoints2, cv.NORM_L2) / len(imgpoints2)
-            mean_error += error
-
-        print("total error: {}".format(mean_error / len(objpoints)))
+        # mean_error = 0
+        #
+        # for i in range(len(objpoints)):
+        #     imgpoints2, _ = cv.projectPoints(objpoints[i], rvecs[i], tvecs[i], cameraMatrix, dist)
+        #     error = cv.norm(imgpoints[i], imgpoints2, cv.NORM_L2) / len(imgpoints2)
+        #     mean_error += error
+        #
+        # print("total error: {}".format(mean_error / len(objpoints)))
 
     def conversion_to_grayscale(self, frame, index: int, look_image=False):
         '''
@@ -357,9 +257,9 @@ class Sort:
         '''
         folder_images = 'grayscale_image'
         if look_image:
-            if not os.path.isdir(os.path.join(path, folder_images)):
-                os.mkdir(os.path.join(path, folder_images))
-            folder_location_image = os.path.join(path, folder_images)
+            if not os.path.isdir(os.path.join(self.path, folder_images)):
+                os.mkdir(os.path.join(self.path, folder_images))
+            folder_location_image = os.path.join(self.path, folder_images)
 
         frame = np.average(frame, axis=2, weights=[0.144, 0.587, 0.299])
         frame = frame.astype(np.uint8)
@@ -434,19 +334,164 @@ class Sort:
         # os.rmdir(self.paths[0])
 
 
+
+class Calib:
+    def __init__(self):
+        self.path_calib_params = None
+        self. calibration_param = None
+
+    def check_path_calib_params(self):
+        print('Укажите путь до файла')
+        self.path_calib_params = input()
+        if self.path_calib_params.split('.')[-1].strip() != "json":
+            print('указан неверный формат файла \nВвести еще раз путь?')
+            answer = input().casefold()
+            if answer.strip() in ("yes", "да"):
+                self.check_path_calib_params()
+            elif answer.strip() in ("no", "нет"):
+                self.path_calib_params = None
+                return self.path_calib_params
+            else:
+                self.check_path_calib_params()
+        else:
+            return self.path_calib_params
+        return self.path_calib_params
+
+    @staticmethod
+    def read_json(path:Path|str):
+        filename = path.split('/')[-1]
+        try:
+            with open(path, 'r') as f:
+                colib_params = json.load(f)
+        except FileNotFoundError:
+            sys.stderr.write(f'{filename} not found in directory \n')
+            return None
+        # print(colib_params.keys())
+        # print('read',type(colib_params))
+        return colib_params
+
+    def main_2(self):
+        if self.calibration_param is not None:
+            return self.calibration_param
+        path = self.check_path_calib_params()
+        if path is not None:
+            self.calibration_param = Calib.read_json(path)
+            if type(self.calibration_param) == dict:
+                # print('main if',type(self.calibration_param))
+                return self.calibration_param
+            elif self.calibration_param is None:
+                self.main_2()
+    @staticmethod
+    def calibration_params(name_protocol: str, path: Path, chessboardSize: tuple):
+        '''
+        тут происходит калибровка параметров камеры и запись в json по имени протокал
+        в json запишем
+        :param name_protocol: Name of protocol
+        :param path: Path where to save json
+        :return:
+        '''
+        start = timeit.default_timer()
+        calib_params = {}
+        # chessboardSize = (15,8)
+        frameSize = (4096, 3000)
+
+        # termination criteria
+        criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+
+        # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
+        objp = np.zeros((chessboardSize[0] * chessboardSize[1], 3), np.float32)
+        objp[:, :2] = np.mgrid[0:chessboardSize[0], 0:chessboardSize[1]].T.reshape(-1, 2)
+
+        size_of_chessboard_squares_mm = 5
+        objp = objp * size_of_chessboard_squares_mm
+
+        # Arrays to store object points and image points from all the images.
+        objpoints = []  # 3d point in real world space
+        imgpoints = []  # 2d points in image plane.
+
+        images = glob.glob('stend/CalibrationOpenCV/*.jpg')
+        # print('ss',images)
+
+        for image in images:
+            # print(image)
+            img = cv.imread(image)
+            gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+            # Find the chess board corners
+            ret, corners = cv.findChessboardCorners(gray, chessboardSize, None)
+
+            # If found, add object points, image points (after refining them)
+            if ret == True:
+                objpoints.append(objp)
+                corners2 = cv.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
+                imgpoints.append(corners)
+
+                # Draw and display the corners
+                cv.drawChessboardCorners(img, chessboardSize, corners2, ret)
+                # cv.imshow('img', img)
+                # cv.waitKey(1000)
+
+        cv.destroyAllWindows()
+
+        # print(imgpoints)
+        ############## CALIBRATION #######################################################
+
+        ret, cameraMatrix, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, frameSize, None, None)
+
+        # print("Camera Calibrated: ", ret)
+        # print("\nCamera Matrix:\n", cameraMatrix)
+        # print("\nDistorsion Parameters:\n", dist)
+        # print("\nRotation Vectors:\n", rvecs)
+        # print("\nTranslation Vectors:\n", tvecs)
+        calib_params['Camera_Calibrated'] = ret
+        calib_params['Camera_Matrix'] = cameraMatrix
+        calib_params['Distorsion_Parameters'] = dist
+        calib_params['Rotation_Vectors'] = rvecs
+        calib_params['Translation_Vectors'] = tvecs
+        json_calib_params = json.dumps(calib_params, indent=4, cls=NumpyEncoder)
+        with open(f'{os.path.join(path, name_protocol)}.json', 'w') as outfile:
+            outfile.write(json_calib_params)
+            # json.dump(json_calib_params, outfile)
+            print(fr'json c параметрами калибровки сохранен в {os.path.join(path, f"{name_protocol}.json")}')
+        end = timeit.default_timer()
+        print(f'Parameter calibration time:{end - start}')
+        return calib_params
+
+    def main(self,name_protocol, path):
+        if self.calibration_param is not None:
+            return self.calibration_param
+        print('Выберите  калибровочные парметры \n 0 - None, 1 - Cчитать с файла, 2 - Запустить процесс подсчета\nВведите цифру ')
+        answer = input().strip().casefold()
+        if answer == '0':
+            self.calibration_param = None
+            return self.calibration_param
+        if answer == '1':
+            self.calibration_param = self.main_2()
+            return self.calibration_param
+        if answer == '2':
+            print('Введите размеры шахматной доски')
+            chessboardSize = tuple(map(int, input().split()))
+            self.calibration_param = self.calibration_params(name_protocol, path, chessboardSize)
+            return self.calibration_param
+        else:
+            self.main(name_protocol, path)
+        return self.calibration_param
+
+
 if __name__ == "__main__":
 
     '''
     Главная функция 
     тут весь движ 
     '''
-
+    calib  = Calib()
     path = '/home/ali/Desktop/test'  # задаем путь в нашу папочку с данными
-    name_protocol = 'test1'  # задаем имя нашего протокола
+    name_protocol = 'test'  # задаем имя нашего протокола
     look_images = []  # можем записать номера изображений которые хотим глянуть
     start_main = timeit.default_timer()
-    calibration_param = None
-    chessboardSize = (15, 8)  # задаем размеры калибровочной доски
+    calibration_param = calib.main(name_protocol,path)
+
+    # chessboardSize = (15, 8)  # задаем размеры калибровочной доски
     # calibration_param = calibration_params(name_protocol, path, chessboardSize)# расчет калибровочных параметров, работает чуть долго, запускаем когда нам нужно иначе оставляем закоменченным
     if len(look_images) > 0:
         t = Sort(path, name_protocol, calibration_param, look_images)
@@ -459,5 +504,5 @@ if __name__ == "__main__":
     print(end_main - start_main)
     print(f'Program running time: {int((end_main - start_main)//60)}:{((end_main - start_main) % 60):0.2f}')
 
-
-
+# /media/ali/E616EDC516ED9739/BioMed/biomechanics/stend/hui.json
+# /home/ali/Desktop/test/test.json
