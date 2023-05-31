@@ -69,7 +69,8 @@ class Sort:
             paths.append(folder_location)
 
             for file in files:
-                if re.fullmatch(f'\d*\.\d*\.{extension}',file.split('/')[-1],) is not None or file.split('/')[-1] == 'exp_params.json' :
+                print(file)
+                if re.fullmatch(f'.*\d*\.\d*\.{extension}|.*exp_params.json', file) is not None:
                     nowlocation = os.path.basename(file)
                     dst = os.path.join(self.path, folder_image, nowlocation)
                     print(f"[*] Перенесен файл '{file}' в {dst}")
@@ -129,7 +130,6 @@ class Sort:
             value_axis_3 = value_axis_1_3[1]
             sum_0_2 = round(value_axis_0 + value_axis_2, 2)
             sum_1_3 = round(value_axis_1 + value_axis_3, 2)
-            # print(value_tenzo)
             self.data['tenzo_0'].append(abs(value_tenzo[0]))
             self.data['tenzo_1'].append(abs(value_tenzo[1]))
             self.data['tenzo_2'].append(abs(value_tenzo[2]))
@@ -485,13 +485,15 @@ if __name__ == "__main__":
     '''
 
     # -----------------------------Тут вводные параметры протокола-----------------------------------------------------------------
+    #                                    |
 
     path = '/home/ali/Desktop/test'  # задаем путь в нашу папочку с данными
     name_protocol = 'test'  # задаем имя нашего протокола
     look_images = []  # можем записать номера изображений которые хотим глянуть
 
-    #-----------------------------Тут вводные параметры протокола-----------------------------------------------------------------
 
+    #                                    |
+    #-----------------------------Тут вводные параметры протокола-----------------------------------------------------------------
 
 
 
@@ -507,7 +509,6 @@ if __name__ == "__main__":
     t.main_function()  # калибрвка изображения и перевод в градации серого а также сохранение  изображений в случае если у нас массив  look_images содежит индексы фреймов
     # t.draw_plot()# отрисовка, параметры нужно через sefl указать в классе, чуть позже напишу  нормально
     end_main = timeit.default_timer()  # замер времени
-    print(end_main - start_main)
     print(f'Program running time: {int((end_main - start_main)//60)}:{((end_main - start_main) % 60):0.2f}')
 
 # /media/ali/E616EDC516ED9739/BioMed/biomechanics/stend/hui.json
