@@ -334,7 +334,6 @@ class Sort:
         # os.rmdir(self.paths[0])
 
 
-
 class Calib:
     def __init__(self):
         self.path_calib_params = None
@@ -460,7 +459,7 @@ class Calib:
     def main(self,name_protocol, path):
         if self.calibration_param is not None:
             return self.calibration_param
-        print('Выберите  калибровочные парметры \n 0 - None, 1 - Cчитать с файла, 2 - Запустить процесс подсчета\nВведите цифру ')
+        print('Выберите  калибровочные параметры \n 0 - None, 1 - Cчитать с файла, 2 - Запустить процесс подсчета\nВведите цифру ')
         answer = input().strip().casefold()
         if answer == '0':
             self.calibration_param = None
@@ -484,15 +483,22 @@ if __name__ == "__main__":
     Главная функция 
     тут весь движ 
     '''
-    calib  = Calib()
+
+    # -----------------------------Тут вводные параметры протокола-----------------------------------------------------------------
+
     path = '/home/ali/Desktop/test'  # задаем путь в нашу папочку с данными
     name_protocol = 'test'  # задаем имя нашего протокола
     look_images = []  # можем записать номера изображений которые хотим глянуть
+
+    #-----------------------------Тут вводные параметры протокола-----------------------------------------------------------------
+
+
+
+
+    calib  = Calib()
     start_main = timeit.default_timer()
     calibration_param = calib.main(name_protocol,path)
 
-    # chessboardSize = (15, 8)  # задаем размеры калибровочной доски
-    # calibration_param = calibration_params(name_protocol, path, chessboardSize)# расчет калибровочных параметров, работает чуть долго, запускаем когда нам нужно иначе оставляем закоменченным
     if len(look_images) > 0:
         t = Sort(path, name_protocol, calibration_param, look_images)
     else:
