@@ -8,7 +8,6 @@ import shutil
 import timeit
 from typing import List
 from pathlib import Path
-import datetime
 import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
@@ -69,7 +68,6 @@ class Sort:
             paths.append(folder_location)
 
             for file in files:
-                print(file)
                 if re.fullmatch(f'.*\d*\.\d*\.{extension}|.*exp_params.json', file) is not None:
                     nowlocation = os.path.basename(file)
                     dst = os.path.join(self.path, folder_image, nowlocation)
@@ -289,7 +287,7 @@ class Sort:
     #         plt.ylabel('force reading of sensor 3', fontsize=14)
     #
 
-    def draw_plot(self, ):
+    def draw_plot(self):
         '''
         тут можно порисовать всякие графики, позже  поприкольнее сделаю
         '''
@@ -310,10 +308,12 @@ class Sort:
         # self.axis_labels(x, y)
         plt.show()
 
-    def main_function(self, ):
+    def main_function(self):
+
         '''
         тут калибровка и перевод в градации серого, беря каждый элемент из папки в которую мы отсортировали выше и удаление первоначальных фреймов для оптимизации по памяти
         '''
+
         if self.calibration_params is None:
             return (print("Нет калибровочных параметров "))
         frames_path = glob.glob(f'{self.paths[0]}/*.npy')  # path to npy
@@ -321,13 +321,9 @@ class Sort:
         index = 1
         for frame in frames_path:
             print(f'frame:{frame}, index:{index}')
-            # img = np.load(frame)
-            # print()
-            look_image = False
-            calib_npy = self.calibration_image(frame, index, look_image)
+            calib_npy = self.calibration_image(frame, index)
             if index in self.look_images_list:
                 look_image = True
-                self.look(frame, index)
             self.conversion_to_grayscale(calib_npy, index, look_image)
             # os.remove(f'{frame}')
             index += 1
