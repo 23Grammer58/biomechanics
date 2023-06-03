@@ -249,7 +249,7 @@ class Sort:
         #
         # print("total error: {}".format(mean_error / len(objpoints)))
 
-    def conversion_to_grayscale(self, frame, index: int, look_image=False):
+    def conversion_to_grayscale(self, frame, index: int, look_image = False):
         '''
         перевод изображения в градации серого  и сохранепия при желании
         '''
@@ -314,6 +314,7 @@ class Sort:
         тут калибровка и перевод в градации серого, беря каждый элемент из папки в которую мы отсортировали выше и удаление первоначальных фреймов для оптимизации по памяти
         '''
 
+
         if self.calibration_params is None:
             return (print("Нет калибровочных параметров "))
         frames_path = glob.glob(f'{self.paths[0]}/*.npy')  # path to npy
@@ -324,7 +325,10 @@ class Sort:
             calib_npy = self.calibration_image(frame, index)
             if index in self.look_images_list:
                 look_image = True
-            self.conversion_to_grayscale(calib_npy, index, look_image)
+                self.conversion_to_grayscale(calib_npy, index, look_image)
+            else:
+                look_image =  False
+                self.conversion_to_grayscale(calib_npy, index, look_image)
             # os.remove(f'{frame}')
             index += 1
         # os.rmdir(self.paths[0])
@@ -397,14 +401,14 @@ class Calib:
         objp = np.zeros((chessboardSize[0] * chessboardSize[1], 3), np.float32)
         objp[:, :2] = np.mgrid[0:chessboardSize[0], 0:chessboardSize[1]].T.reshape(-1, 2)
 
-        size_of_chessboard_squares_mm = 5
+        size_of_chessboard_squares_mm = 1.5
         objp = objp * size_of_chessboard_squares_mm
 
         # Arrays to store object points and image points from all the images.
         objpoints = []  # 3d point in real world space
         imgpoints = []  # 2d points in image plane.
 
-        images = glob.glob('stend/CalibrationOpenCV/*.jpg')
+        images = glob.glob('stend/Calibration4/*.jpg')
         # print('ss',images)
 
         for image in images:
@@ -483,8 +487,8 @@ if __name__ == "__main__":
     # -----------------------------Тут вводные параметры протокола-----------------------------------------------------------------
     #                                    |
 
-    path = '/home/ali/Desktop/test'  # задаем путь в нашу папочку с данными
-    name_protocol = 'test'  # задаем имя нашего протокола
+    path = 'BP10x10'  # задаем путь в нашу папочку с данными
+    name_protocol = 'BP10x10'  # задаем имя нашего протокола
     look_images = []  # можем записать номера изображений которые хотим глянуть
 
 
