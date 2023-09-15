@@ -85,11 +85,18 @@ class Sort:
         logging.basicConfig(level=logging.INFO, filename=f"{os.path.join(self.path, self.name_protocol)}.log", filemode="w",
                             format="%(asctime)s %(levelname)s %(message)s")
         logging.info(f'Name protocol \'{self.name_protocol}\'')
+
+
         # print(self.paths)
         path_Indication = self.paths[1]
         list_json = sorted(os.listdir(path_Indication))
+        logging.info(f'protocol length  {len(list_json ) - 1 }')
         all_json = {}
         id = 1
+        writing_error = 0
+        frame_skip = 0
+        skip_array = []
+        writing_error_arr = []
         for x in list_json:
             path_element_Inication = os.path.join(path_Indication, x)
             if "exp_params" not in path_element_Inication:
@@ -97,17 +104,24 @@ class Sort:
                     try:
                         dictionary_string = eval(json.load(f))
                     except SyntaxError as err:
-                        logging.error(f"writing error frame {id}")
+                        writing_error += 1
+                        writing_error_arr.append(writing_error)
                         id += 1
                         continue
                     try:
                         value_key = dictionary_string[fr'{id}']
                     except KeyError as err:
-                        logging.error(f"frame skipped {id}")
+                        skip_array.append(id)
+                        frame_skip += 1
                         id += 1
                         continue
                     all_json[f"{id}"] = value_key
                     id += 1
+        logging.error(f"writing error frame {writing_error}")
+        logging.error(f"writing error array id  {skip_array}")
+        logging.error(f"frame skipped all {frame_skip}")
+        logging.error(f"frame skipped array id  {skip_array}")
+
         # return all_json
 
         names = ['frame', 'axis_0_2', 'axis_1_3', 'tenzo_0', 'tenzo_1', 'tenzo_2', 'tenzo_3', 'mean_tenzo_0_2',
@@ -291,15 +305,15 @@ class Sort:
         '''
         тут можно порисовать всякие графики, позже  поприкольнее сделаю
         '''
-        x = self.data.get('axis_0_2')[:200]
-        y = self.data.get('Force_0_2')[:200]
+        x = self.data['axis_0_2']
+        y = self.data['mean_tenzo_0_2']
         # print('x',len(x))
         # print('y',y)
         fig, ax = plt.subplots(figsize=(150, 30), dpi=150)
-        plt.ylim(0, 0.3)
+        # plt.ylim(0, 0.3)
         plt.plot(x, y)
         # plt.scatter(x, y)
-        plt.xticks(x[::5], rotation=45)
+        plt.xticks(x[::10], rotation=45)
         # plt.stem(frame_x,tenzo_3)
         # for row in tenzo_3:
         # for id, value in enumerate(y):
@@ -487,8 +501,8 @@ if __name__ == "__main__":
     # -----------------------------Тут вводные параметры протокола-----------------------------------------------------------------
     #                                    |
 
-    path = 'BP10x10'  # задаем путь в нашу папочку с данными
-    name_protocol = 'BP10x10'  # задаем имя нашего протокола
+    path = 'confa/'  # задаем путь в нашу папочку с данными
+    name_protocol = 'ttt'  # задаем имя нашего протокола
     look_images = []  # можем записать номера изображений которые хотим глянуть
 
 
@@ -506,8 +520,8 @@ if __name__ == "__main__":
     else:
         t = Sort(path, name_protocol, calibration_param)
     t.write_json_to_dictionary()  # чтения json и запись в csv, создается также логгер с ошибками(неправильная запись,либо пропуск фремйа)
-    t.main_function()  # калибрвка изображения и перевод в градации серого а также сохранение  изображений в случае если у нас массив  look_images содежит индексы фреймов
-    # t.draw_plot()# отрисовка, параметры нужно через sefl указать в классе, чуть позже напишу  нормально
+    # t.main_function()  # калибрвка изображения и перевод в градации серого а также сохранение  изображений в случае если у нас массив  look_images содежит индексы фреймов
+    t.draw_plot()# отрисовка, параметры нужно через sefl указать в классе, чуть позже напишу  нормально
     end_main = timeit.default_timer()  # замер времени
     print(f'Program running time: {int((end_main - start_main)//60)}:{((end_main - start_main) % 60):0.2f}')
 
