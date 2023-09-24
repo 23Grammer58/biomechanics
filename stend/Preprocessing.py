@@ -8,6 +8,7 @@ import json
 import glob
 import re
 import shutil
+import csv
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -32,12 +33,13 @@ class DataProcessing:
     def __path_log(self):
         logs = glob.glob(os.path.join(self.path,'*.log'))
         for val in logs:
-            if not re.search(f"(new|{self.name_protocol})", val):
+            if not re.search(f"(new|{self.name_protocol})", os.path.split(val)[1]):
+                print(val)
                 return val
-
         # print(logs)
     def __path_log_new(self):
         log_file = list(os.path.split(self.path_log))
+        # print(log_file)
         # log_name = log_file[1].split('.')
         # log_name[0]= log_name[0] +'_new'
         # path_log_new = '.'.join(log_name)
@@ -55,8 +57,8 @@ class DataProcessing:
         # os.path.split(self.path)
         # return int(file.split('/')[-1].split('.')[0])
         # os.path.split(file)[1].split('.')[0])
-        path = os.path.split(file)[1]
-        name_file = re.sub(r'([\d+\.]?\d+).json|([\d+\.]?\d+).npy', r'\1\2', path)
+        file = os.path.split(file)[1]
+        name_file = re.sub(r'([\d+\.]?\d+).json|([\d+\.]?\d+).npy', r'\1\2', file)
         return float(name_file)
 
     def __sort_in_folder(self):
@@ -93,7 +95,6 @@ class DataProcessing:
         return paths
 
     def read_tenzo_value_log_to_dictionary(self):
-        self.tenzo = {}
         self.sampling = []
         self.tenzo_data = []
         sum_sampling = 0
@@ -131,12 +132,16 @@ class DataProcessing:
         iqr = q3 - q1
         lower_bound = q1 - 3 * iqr
         upper_bound = q3 + 3 * iqr
-        for i, x in enumerate(data):
-            #     print(f'{data=}\n,{lower_bound=},{upper_bound=}')
-            if x < lower_bound or x > upper_bound:
-                # print(x)
-                data.pop(i)
-        return data
+        filtered_data = [x for x in data if (lower_bound < x < upper_bound)]
+        return filtered_data
+        # for i, x in enumerate(data):
+        #     #     print(f'{data=}\n,{lower_bound=},{upper_bound=}')
+        #     if x < lower_bound or x > upper_bound:
+        #         # print(x)
+        #         data.pop(i)
+        # if abs(max(data)) >150000:
+        #     print('posle', data)
+        # return data
 
     @staticmethod
     def find_outliers_z_score(data):
@@ -144,12 +149,8 @@ class DataProcessing:
         std = np.std(data)
         lower_bound = mean - 3 * std
         upper_bound = mean + 3 * std
-        for i,x in enumerate(data):
-            #     print(f'{data=}\n{z_score=},{lower_bound=},{upper_bound=},{mean=},{std=}')
-            z_score = (x - mean) / std
-            if z_score < lower_bound or z_score > upper_bound:
-                data.pop(i)
-        return data
+        filtered_data = [x for x in data if (lower_bound < x < upper_bound)]
+        return filtered_data
 
     def search_outlier(self):
         for index, window in enumerate(self.tenzo_data):
@@ -197,7 +198,7 @@ class DataProcessing:
                 # print(f'{tenzo_mean_value=}')
 
     def rewriting_file_json(self):
-        print(self.error_open)
+        # print(self.error_open)
         for index, file in enumerate(self.json_files):
             with open(f'{file}','w') as json_file:
                 if index+1 in self.error_open:
@@ -227,7 +228,6 @@ class DataProcessing:
                             move_1_3 = np.append(move_1_3,float(*res))
                         elif i == 2 or i == 3:
                             move_2_4 = np.append(move_2_4,float(*res))
-                    print(int(data[1]), iter)
                     if int(data[1]) == iter:
                         move_1_3 = move_1_3 / self.sampling[iter-1]
                         move_2_4 = move_2_4 / self.sampling[iter-1]
@@ -239,32 +239,92 @@ class DataProcessing:
                         else:
                             print('dddddddd')
                     data_str_datalog = [tuple(move_1_3),tuple(move_2_4)]
-                    s = datalog.readline()
-                    res = re.sub(r'\(\([-+]?\d+\.\d+, [-+]?\d+\.\d+\), \([-+]?\d+\.\d+, [-+]?\d+\.\d+\)\)', f'({data_str_datalog[0]}, {data_str_datalog[1]})',s)
+                    res = re.sub(r'\(\([-+]?\d+\.\d+, [-+]?\d+\.\d+\), \([-+]?\d+\.\d+, [-+]?\d+\.\d+\)\)', f'({data_str_datalog[0]}, {data_str_datalog[1]})',value)
                     new_datalog.write(res)
-                    # print(s)
 
-                # res = re.search(r'\(\(.+, +), \(-\d+\.\d+, -\d+\.\d\)\)',s)
-                # print(res)
             datalog.close()
             new_datalog.close()
 
-    # def drow_plot(self):
-    #     sss = []
-    #     for i in self.file:
-    #         mean0_2 = self.file[i][1][0] + self.file[i][1][2]
-    #         sss.append(mean0_2)
-    #     plt.plot(sss)
-    #     plt.show()
+
+    def create_csv(self):
+        data = {}
+        names = ['frame', 'axis_0_2', 'axis_1_3', 'tenzo_0', 'tenzo_1', 'tenzo_2', 'tenzo_3', 'mean_tenzo_0_2',
+                 'mean_tenzo_1_3']
+
+        for name in names:
+                data[name] = []
+
+        for id, x in enumerate(self.json_files_average_strength):
+            data['frame'].append(x)
+            value_key_x = self.json_files_average_strength[x]
+            value_axes = value_key_x[0]
+            value_tenzo = value_key_x[1]
+            value_axis_0_2 = value_axes[0]
+            value_axis_1_3 = value_axes[1]
+            value_axis_0 = value_axis_0_2[0]
+            value_axis_2 = value_axis_0_2[1]
+            value_axis_1 = value_axis_1_3[0]
+            value_axis_3 = value_axis_1_3[1]
+            sum_0_2 = round(value_axis_0 + value_axis_2, 2)
+            sum_1_3 = round(value_axis_1 + value_axis_3, 2)
+            data['tenzo_1'].append(abs(value_tenzo[1]))
+            data['tenzo_2'].append(abs(value_tenzo[2]))
+            data['tenzo_0'].append(abs(value_tenzo[0]))
+            data['tenzo_3'].append(abs(value_tenzo[3]))
+            data['mean_tenzo_0_2'].append((abs(value_tenzo[0]) + abs(value_tenzo[2])) / 2)
+            data['mean_tenzo_1_3'].append((abs(value_tenzo[1]) + abs(value_tenzo[3])) / 2)
+
+            if id == 0:
+                data['axis_0_2'].append(sum_0_2)
+                data['axis_1_3'].append(sum_1_3)
+
+            else:
+                data['axis_0_2'].append(round(data['axis_0_2'][id - 1] + sum_0_2, 2))
+                data['axis_1_3'].append(round(data['axis_1_3'][id - 1] + sum_1_3, 2))
+
+        data['correlation_force_0_2'] = np.array(data['mean_tenzo_0_2']) * 0.96713
+        data['correlation_force_1_3'] = np.array(data['mean_tenzo_1_3']) * 0.88
+
+        with open(fr'{os.path.join(self.path, self.name_protocol)}.csv', 'w', newline='') as csvfile:
+            fieldnames = list(data.keys())
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for i in range(len(data['frame'])):
+                row = {}
+                for key in data:
+                    # print(key)
+                    row[key] = data[key][i]
+                # print(row)
+                writer.writerow(row)
+        self.data = data
+        print(fr'создан csv файл {os.path.join(self.path, self.name_protocol)}.csv')
+    def draw_plot(self):
+        x = self.data['axis_0_2']
+        y = self.data['mean_tenzo_0_2']
+        # print('x',len(x))
+        # print('y',y)
+        fig, ax = plt.subplots(figsize=(150, 30), dpi=150)
+        # plt.ylim(0, 0.3)
+        plt.plot(x, y)
+        # plt.scatter(x, y)
+        plt.xticks(x[::10], rotation=45)
+        # plt.stem(frame_x,tenzo_3)
+        # for row in tenzo_3:
+        # for id, value in enumerate(y):
+        #     # print(row.cty)
+        #     ax.text(id, value, s=round(value, 2), horizontalalignment='center', verticalalignment='bottom', fontsize=8)
+        # self.axis_labels(x, y)
+        plt.show()
 def test():
     # tt = DataProcessing('confa','ttt')
-    tt = DataProcessing('stend/VHB491012mmBiostand1-3','ttt')
-    # tt.read_tenzo_value_log_to_dictionary()
-    # tt.search_outlier()
-    # tt.mean_value_tenzo()
-    # tt.rewriting_file_json()
-    # tt.rewriting_file_log()
-    # tt.drow_plot()
+    tt = DataProcessing('syfooq','syfooq')
+    tt.read_tenzo_value_log_to_dictionary()
+    tt.search_outlier()
+    tt.mean_value_tenzo()
+    tt.rewriting_file_json()
+    tt.rewriting_file_log()
+    tt.create_csv()
+    tt.draw_plot()
 
 if __name__ == "__main__":
     test()
