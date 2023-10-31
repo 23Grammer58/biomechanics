@@ -66,6 +66,7 @@ def req (data):
 def init_hardware(ser, mon):
     print('\nЖмите ENTER для старта калибровки.', end="")
     #После первого включения измеритель ждет любого входного символа
+    mon.write(b'.\n')
     input()
 
     #Активируем приводы
@@ -154,12 +155,15 @@ def start_hardware(ser, mon, protocol, ser_mon):
         com = f'pos({-m0 * 10000}, {-m1 * 10000})\n'
         #com = f'pos({-10000}, {-10000}, {-10000}, {-10000})\n'
 
+        # Стартуем тензодатчики. Ответ поступит через 0.1 - 0.3 секунды
+        #mon.write(b'\n') #На данной позиции тестовый заход выдает стабильно >5 ошибок на сотню
+
         #print('**', com)
         ser.write(com.encode())
         time.sleep(0.3) #Пауза основного цикла. Двигатели двигаются.
         
         #Стартуем тензодатчики. Ответ поступит через 0.1 - 0.3 секунды
-        mon.write(b'\n')
+        #mon.write(b'\n')
         
         time.sleep(0.390) #Пауза основного цикла. Тензоданные готовятся.
         
@@ -178,7 +182,7 @@ def start_hardware(ser, mon, protocol, ser_mon):
 
 def stop_hardware(ser, mon):
     print('{"-1" : [[[0,0], [0,0]], [0,0]]}') #Конечная посылка
-    print('Завершили.')
+    print('Завершили работу модуля управления.')
 
     #Останавливаем двигатели.
     ser.write(b'pos(1,1)\n')
@@ -190,13 +194,24 @@ def stop_hardware(ser, mon):
     ser.write(b'boot\n')
     ser.close()
     mon.close()
-    
+    global stop_threads
+    stop_threads = True
+    print("Завершили прослушивание СОМ-портов.")
+
+
+def stop():
+    global stop_threads
+    return stop_threads
+
 def thread_function_mon(name,ser_mon, stop):
     global pointx , pointy, tele, tron, i, epoh
     print("MON-listener стартовал")
     data1 = 0
     mon = ser_mon.mon
-   
+    log_file = open('two_gt.log', 'w')
+    log_file.close()
+    #log_file = open('two_gt.log', 'a')
+
     while(1):
         try:
             if mon.in_waiting == 0: continue
@@ -206,23 +221,43 @@ def thread_function_mon(name,ser_mon, stop):
                 data1 = mon.read().decode()
                 ser_mon.tele.append(data1)
                 if data1=='\n':
+                    #print([ser_mon.i + 1, ser_mon.epoh, "".join(ser_mon.tele[:-2])])
                     ser_mon.outdata.append([ser_mon.i+1, ser_mon.epoh, "".join(ser_mon.tele[:-2])])
+                    if ser_mon.epoh != '':
+                        data_bl = [time.time_ns(),ser_mon.i + 1, ser_mon.epoh, "".join(ser_mon.tele[:-2])]
+                        log_file = open('two_gt.log', 'a')
+                        #print("".join(str(data_bl)), end='')
+                        log_file.write(str("".join(str(data_bl))))
+                        log_file.write("\n")
+                        #print("*")
+                        log_file.close()
                     ser_mon.tele = []
-                if ser_mon.tron:
-                    print("\033[34m{}".format(data1), end='')
-                    print(data1, end='')
+                #if ser_mon.tron and ser_mon.epoh != '':
+                    #print("\033[34m{}".format(data1), end='')
+                    #print(data1, end='')
         except:
             pass
+
+        #log_file.flush()
+
         if stop():
+            #log_file.close()
             print("  Exiting loop.")
             break
 
 def thread_function(name, ser_mon, stop):
     global pointx , pointy, tron, outdata
+
     print("COM-listener стартовал")
     data1 = 0 
-    ser = ser_mon.ser   
+    ser = ser_mon.ser
+    mon = ser_mon.mon
     while(1):
+        #try:
+        #    if mon.in_waiting == 0:
+        #        mon.write(b'\n')
+        #except:
+        #    pass
         try:
             if ser.in_waiting == 0: continue
             #Читаем поток данных от источника
@@ -235,6 +270,7 @@ def thread_function(name, ser_mon, stop):
                     
         except:
             pass
+
         if stop():
             print("  Exiting loop.")
             break
@@ -272,7 +308,6 @@ def main_loop(protocol):
 
     init_hardware(ser, mon)
     start_hardware(ser, mon, protocol)
-
 
     stop_threads = True
     
@@ -313,3 +348,4 @@ if __name__ == "__main__":
     init_hardware(ser, mon)
     start_hardware(ser, mon, protocol)
     stop_hardware(ser, mon)
+
