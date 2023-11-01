@@ -1,3 +1,6 @@
+from tqdm import tqdm
+import cv2 as cv
+import timeit
 from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,6 +24,149 @@ class NumpyEncoder(json.JSONEncoder):
             return obj.tolist()
         return json.JSONEncoder.default(self, obj)
 
+class Calib:
+    def __init__(self):
+        self.path_calib_params = None
+        self. calibration_param = None
+
+    def check_path_calib_params(self):
+        print('Укажите путь до файла')
+        self.path_calib_params = input()
+        if self.path_calib_params.split('.')[-1].strip() != "json":
+            print('Yказан неверный формат файла \nВвести еще раз путь?')
+            answer = input().casefold()
+            if answer.strip() in ("yes", "да"):
+                self.check_path_calib_params()
+            elif answer.strip() in ("no", "нет"):
+                self.path_calib_params = None
+                return self.path_calib_params
+            else:
+                self.check_path_calib_params()
+        else:
+            return self.path_calib_params
+        return self.path_calib_params
+
+    @staticmethod
+    def read_json(path:Path|str):
+        filename = path.split('/')[-1]
+        try:
+            with open(path, 'r') as f:
+                colib_params = json.load(f)
+        except FileNotFoundError:
+            sys.stderr.write(f'{filename} not found in directory \n')
+            return None
+        # print(colib_params.keys())
+        # print('read',type(colib_params))
+        return colib_params
+
+    def read_param_from_json(self):
+        if self.calibration_param is not None:
+            return self.calibration_param
+        path = self.check_path_calib_params()
+        if path is not None:
+            self.calibration_param = Calib.read_json(path)
+            if type(self.calibration_param) == dict:
+                # print('main if',type(self.calibration_param))
+                return self.calibration_param
+            elif self.calibration_param is None:
+                self.read_param_from_json()
+    @staticmethod
+    def calibration_params(name_protocol: str, path: Path, chessboardSize: tuple):
+        '''
+        тут происходит калибровка параметров камеры и запись в json по имени протокал
+        в json запишем
+        :param name_protocol: Name of protocol
+        :param path: Path where to save json
+        :return:
+        '''
+        start = timeit.default_timer()
+        calib_params = {}
+        # chessboardSize = (15,8)
+        frameSize = (4096, 3000)
+
+        # termination criteria
+        criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+
+        # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
+        objp = np.zeros((chessboardSize[0] * chessboardSize[1], 3), np.float32)
+        objp[:, :2] = np.mgrid[0:chessboardSize[0], 0:chessboardSize[1]].T.reshape(-1, 2)
+
+        size_of_chessboard_squares_mm = 1.5
+        objp = objp * size_of_chessboard_squares_mm
+
+        # Arrays to store object points and image points from all the images.
+        objpoints = []  # 3d point in real world space
+        imgpoints = []  # 2d points in image plane.
+
+        images = glob.glob(os.path.join('stend',  'Calibration4', '*.jpg'))
+
+
+        for image in tqdm(images):
+            img = cv.imread(image)
+            gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+            # Find the chess board corners
+            ret, corners = cv.findChessboardCorners(gray, chessboardSize, None)
+
+            # If found, add object points, image points (after refining them)
+            if ret:
+                objpoints.append(objp)
+                corners2 = cv.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
+                imgpoints.append(corners)
+
+                # Draw and display the corners
+                cv.drawChessboardCorners(img, chessboardSize, corners2, ret)
+                # cv.imshow('img', img)
+                # cv.waitKey(1000)
+
+        cv.destroyAllWindows()
+
+        # print(imgpoints)
+        ############## CALIBRATION #######################################################
+
+        ret, cameraMatrix, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, frameSize, None, None)
+
+        # print("Camera Calibrated: ", ret)
+        # print("\nCamera Matrix:\n", cameraMatrix)
+        # print("\nDistorsion Parameters:\n", dist)
+        # print("\nRotation Vectors:\n", rvecs)
+        # print("\nTranslation Vectors:\n", tvecs)
+        calib_params['Camera_Calibrated'] = ret
+        calib_params['Camera_Matrix'] = cameraMatrix
+        calib_params['Distorsion_Parameters'] = dist
+        calib_params['Rotation_Vectors'] = rvecs
+        calib_params['Translation_Vectors'] = tvecs
+        json_calib_params = json.dumps(calib_params, indent=4, cls=NumpyEncoder)
+        with open(f'{os.path.join(path, name_protocol)}.json', 'w') as outfile:
+            outfile.write(json_calib_params)
+            # json.dump(json_calib_params, outfile)
+            print(fr'json c параметрами калибровки сохранен в {os.path.join(path, f"{name_protocol}.json")}')
+        end = timeit.default_timer()
+        print(f'Parameter calibration time:{end - start}')
+        return calib_params
+
+    def main(self,name_protocol, path):
+        if self.calibration_param is not None:
+            return self.calibration_param
+        print('Выберите  калибровочные параметры \n 0 - None, 1 - Cчитать с файла, 2 - Запустить процесс подсчета\nВведите цифру ')
+        answer = input().strip().casefold()
+        if answer == '0':
+            self.calibration_param = None
+            return self.calibration_param
+        if answer == '1':
+            self.calibration_param = self.read_param_from_json()
+            return self.calibration_param
+        if answer == '2':
+            print('Введите размеры шахматной доски')
+            chessboardSize = tuple(map(int, input().split()))
+            self.calibration_param = self.calibration_params(name_protocol, path, chessboardSize)
+            return self.calibration_param
+        else:
+            self.main(name_protocol, path)
+        return self.calibration_param
+
+
+
 class DataProcessing:
     def __init__(self,path:str,name_protocol:str):
         self.path = path
@@ -28,7 +174,6 @@ class DataProcessing:
         self.path_log = self.__path_log()
         self.path_log_new =self.__path_log_new()
         self.paths = self.__sort_in_folder()
-
 
     def __path_log(self):
         logs = glob.glob(os.path.join(self.path,'*.log'))
@@ -49,7 +194,8 @@ class DataProcessing:
         return new_path_log
 
 
-    def __sort_by(self,file:str) -> int:
+    @staticmethod
+    def sort_by(file:str) -> float or int:
         '''
         функция для сортировки при считывания файлов
         '''
@@ -59,6 +205,7 @@ class DataProcessing:
         # os.path.split(file)[1].split('.')[0])
         file = os.path.split(file)[1]
         name_file = re.sub(r'([\d+\.]?\d+).json|([\d+\.]?\d+).npy', r'\1\2', file)
+        # print(name_file)
         return float(name_file)
 
     def __sort_in_folder(self):
@@ -155,7 +302,7 @@ class DataProcessing:
     def search_outlier(self):
         for index, window in enumerate(self.tenzo_data):
             for key in window.keys():
-                values = window[key]
+                values = np.array(window[key]) * (-1)
                 if len(values) > 3:
                     # values = DataProcessing.find_outliers_z_score(list(set(values)))
                     values = DataProcessing.find_outliers_iqr(list(set(values)))
@@ -166,8 +313,8 @@ class DataProcessing:
         path_Indication = self.paths[1]
         self.json_files=glob.glob(os.path.join(path_Indication,'*.json'))
         # coef = [46745, 45731, 45731, 39700]
-        self.json_files.sort(key=self.__sort_by)
-        # print(self.json_files)
+        self.json_files.sort(key = DataProcessing.sort_by)
+        print(self.json_files)
         self.json_files_average_strength = {}
         # print(self.tenzo_data)
         self.error_open = {}
@@ -178,14 +325,14 @@ class DataProcessing:
                     file = eval(json.load(json_file))
                     file[f'{index + 1}']
                 except Exception as e:
-                    print(self.json_files[index])
-                    print(file)
-                    print(index+1)
+                    # print(self.json_files[index])
+                    # print(file)
+                    # print(index+1)
                     self.error_open[index+1] = e
                     continue
                 tenzo_mean_value = []
                 for key in window.keys():
-                    values = window[key]
+                    values = np.array(window[key])
                     # print(f'{window=},{values=},{key=}')
                     mean = sum(values)/len(values)
                     tenzo_mean_value.append(mean)
@@ -267,12 +414,12 @@ class DataProcessing:
             value_axis_3 = value_axis_1_3[1]
             sum_0_2 = round(value_axis_0 + value_axis_2, 2)
             sum_1_3 = round(value_axis_1 + value_axis_3, 2)
-            data['tenzo_1'].append(abs(value_tenzo[1]))
-            data['tenzo_2'].append(abs(value_tenzo[2]))
-            data['tenzo_0'].append(abs(value_tenzo[0]))
-            data['tenzo_3'].append(abs(value_tenzo[3]))
-            data['mean_tenzo_0_2'].append((abs(value_tenzo[0]) + abs(value_tenzo[2])) / 2)
-            data['mean_tenzo_1_3'].append((abs(value_tenzo[1]) + abs(value_tenzo[3])) / 2)
+            data['tenzo_1'].append(value_tenzo[1])
+            data['tenzo_2'].append(value_tenzo[2])
+            data['tenzo_0'].append(value_tenzo[0])
+            data['tenzo_3'].append(value_tenzo[3])
+            data['mean_tenzo_0_2'].append((value_tenzo[0] + value_tenzo[2]) / 2)
+            data['mean_tenzo_1_3'].append((value_tenzo[1] + value_tenzo[3]) / 2)
 
             if id == 0:
                 data['axis_0_2'].append(sum_0_2)
@@ -299,38 +446,221 @@ class DataProcessing:
         self.data = data
         print(fr'создан csv файл {os.path.join(self.path, self.name_protocol)}.csv')
     def draw_plot(self):
-        x = self.data['axis_0_2']
-        y = self.data['mean_tenzo_0_2']
-        # print('x',len(x))
-        # print('y',y)
+        x_0_2 = self.data['axis_0_2']
+        y_0_2 = self.data['mean_tenzo_0_2']
+
         fig, ax = plt.subplots(figsize=(150, 30), dpi=150)
-        # plt.ylim(0, 0.3)
-        plt.plot(x, y)
+
+        plt.plot(x_0_2, y_0_2, marker='x', label = 'axis 0-2')
+        plt.ylabel('$F($N$)$', rotation = 0)
+        plt.xlabel('Displacement [mm]')
+        plt.title(f'{self.name_protocol}')
         # plt.scatter(x, y)
-        plt.xticks(x[::10], rotation=45)
-        # plt.stem(frame_x,tenzo_3)
+        # plt.xticks(x[::10], rotation=45)
+        # plt.stem(x,y)
         # for row in tenzo_3:
         # for id, value in enumerate(y):
         #     # print(row.cty)
         #     ax.text(id, value, s=round(value, 2), horizontalalignment='center', verticalalignment='bottom', fontsize=8)
         # self.axis_labels(x, y)
+        x_1_3 = self.data['axis_1_3']
+        y_1_3 = self.data['mean_tenzo_1_3']
+        plt.plot(x_1_3, y_1_3, marker='*', label = 'axis 1-3' )
+        plt.legend()
         plt.show()
+
+
+class WorkToImages:
+    """
+    Класс для работы с изображениями:
+    калибровка,сохранение ....
+    """
+    def __init__(self, path: str, paths: list, calibration_params: dict | None, look_images: list | str):
+
+        if isinstance(calibration_params, dict):
+            self.calibration_params = calibration_params
+        else:
+            # print("Нет калибровочных параметров")
+                    # "Опреации с изображенями будут произведены без учета калибровочных параметров")
+            self.calibration_params = None
+        self.path = path
+        self.paths = paths
+        self.calibration_params = calibration_params
+        self.path_folder_frame = self.paths[0]
+        self.frames_paths = self.__npy_files()
+        self.__get_index(look_images)
+
+    def __npy_files(self):
+        frames_path = glob.glob(f'{self.path_folder_frame}/*.npy')  # path to npy
+        frames_path.sort(key=DataProcessing.sort_by)
+        return frames_path
+
+    def __get_index(self, look_images):
+        if isinstance(look_images,str):
+            if look_images == 'all':
+                self.look_images = list(range(1, len(self.frames_paths)+1))
+            if look_images == 'no':
+                self.look_images = None
+        elif isinstance(look_images, list):
+            if len(look_images) > 0:
+                self.look_images = look_images
+            else:
+                self.look_images = None
+
+    def look(self, index: int):
+        '''
+        функция  для просмтора изображений если двруг захотим
+        '''
+        print(self.frames_paths)
+        npy = np.load(self.frames_paths[index-1])  # read npy
+        # npy = cv2.cvtColor(npy, cv2.COLOR_BGR2RGB)
+        print(npy)
+        img = Image.fromarray(npy)
+        img.save(f"{self.paths[2]}/{index}.tif")  # transfer from npy to tif
+
+    def calibration_image(self, frame : str, index: int, look_image=False):
+        '''
+        калибровка изображения по калибровочным пармаетрам  и возможно сохранение при желании
+        '''
+
+        folder_images = 'Calibration_Images'
+        if look_image:
+            if not os.path.isdir(os.path.join(self.path, folder_images)):
+                os.mkdir(os.path.join(self.path, folder_images))
+            folder_location_image = os.path.join(self.path, folder_images)
+        start = timeit.default_timer()
+
+        # start = timeit.default_timer()
+        # img = cv.imread(frame)
+        img = np.load(frame)
+        h, w = img.shape[:2]
+        newCameraMatrix, roi = cv.getOptimalNewCameraMatrix(self.calibration_params.get('Camera_Matrix'),
+                                                            self.calibration_params.get('Distorsion_Parameters'),
+                                                            (w, h), 1, (w, h))
+        # print("roi",roi)
+        # print("\nNewCamera Matrix:\n", newCameraMatrix)
+
+        # Undistort
+        dst = cv.undistort(img, self.calibration_params.get('Camera_Matrix'),
+                           self.calibration_params.get('Distorsion_Parameters'), None, newCameraMatrix)
+
+        # crop the image
+        x, y, w, h = roi
+        dst = dst[y:y + h, x:x + w]
+        # cv.imwrite('caliResult3.jpg', dst)
+
+        # Undistort with Remapping
+        mapx, mapy = cv.initUndistortRectifyMap(self.calibration_params.get('Camera_Matrix'),
+                                                self.calibration_params.get('Distortion_Parameters'), None,
+                                                newCameraMatrix, (w, h), 5)
+        dst = cv.remap(img, mapx, mapy, cv.INTER_LINEAR)
+
+        # crop the image
+        x, y, w, h = roi
+        dst = dst[y:y + h, x:x + w]
+        # textlookfor = r'[0-9]+'
+        # res = re.search(textlookfor, frame[-7:-3])
+        # print(res[0])
+
+        # np.save(f'{folder_location_npy}/frame{j}', dst)
+        if look_image:
+            cv.imwrite(f'{folder_location_image}/frame{index}.tif', dst)
+
+        end = timeit.default_timer()
+        print(f"Time taken is colibration image {end - start}s")
+        return dst
+
+    def conversion_to_grayscale(self, frame, index: int, look_image=False, flag_calib=True):
+        '''
+        перевод изображения в градации серого  и сохранепия при желании
+        '''
+        if flag_calib:
+            folder_images = 'Grayscale_Calib_Images'
+        else:
+            folder_images = 'Grayscale_No_Calib_Images'
+        if look_image:
+            if not os.path.isdir(os.path.join(self.path, folder_images)):
+                os.mkdir(os.path.join(self.path, folder_images))
+            folder_location_image = os.path.join(self.path, folder_images)
+
+        frame = np.average(frame, axis = 2, weights=[0.144, 0.587, 0.299])
+        frame = frame.astype(np.uint8)
+        # print(self.paths)
+
+        np.save(f'{self.paths[3]}/{index}', frame)
+
+        if look_image:
+            frame = frame.astype(np.uint8)
+            frame = Image.fromarray(frame)
+            frame.save(f'{folder_location_image}/{index}.tif')
+
+    def processing_answer_calib(self):
+        print("Перевести в градации серого неоткалиброванные изображения?\n"
+              " 1 - Продолжить, 0 - Завершить.")
+        answer = input()
+        if answer.strip().casefold() in ['да', 'yes', '1']:
+            return True
+        elif answer.strip().casefold() in ['нет', 'no', '0']:
+            return False
+        else:
+            return self.processing_answer_calib()
+    def main_function(self):
+        '''
+        тут калибровка и перевод в градации серого, беря каждый элемент из папки в которую мы отсортировали выше и удаление первоначальных фреймов для оптимизации по памяти
+        '''
+        # print('Продолжить работу с изображенями без учета калибровочных параметров?')
+        flag_calib = True
+
+        if self.calibration_params is None:
+            print("Нет калибровочных параметров")
+            answer = self.processing_answer_calib()
+            if answer:
+                flag_calib = False
+            elif not answer:
+                return
+        len_files = len(self.frames_paths)
+        print(f'Колличество файлов:{len_files}')
+        for index, frame in enumerate(self.frames_paths):
+            print(f'frame:{frame}, index:{index+1}, Осталось обработать файлов: {len_files - (index )}')
+            if flag_calib:
+                npy_file = self.calibration_image(frame, index + 1)
+            else:
+                npy_file = np.load(frame)
+            if self.look_images is not None:
+                if (index+1) in self.look_images:
+                    look_image = True
+                    self.conversion_to_grayscale(npy_file, index+1,  look_image, flag_calib)
+                else:
+                    look_image = False
+                    self.conversion_to_grayscale(npy_file, index+1, look_image, flag_calib)
+            else:
+                look_image = False
+                self.conversion_to_grayscale(npy_file, index + 1, look_image, flag_calib)
+
+            # os.remove(f'{frame}')
+        # os.rmdir(self.paths[0])
+
+
 def test():
-    # tt = DataProcessing('confa','ttt')
-    tt = DataProcessing('syfooq','syfooq')
-    tt.read_tenzo_value_log_to_dictionary()
-    tt.search_outlier()
-    tt.mean_value_tenzo()
-    tt.rewriting_file_json()
-    tt.rewriting_file_log()
-    tt.create_csv()
-    tt.draw_plot()
+    path = 'syfooq'
+    name_protocol = 'syfooq'
+    calib = Calib()
+    start_main = timeit.default_timer()
+    calibration_param = calib.main(name_protocol, path)
+
+    tt = DataProcessing(path,name_protocol)
+    # tt.read_tenzo_value_log_to_dictionary()
+    # tt.search_outlier()
+    # tt.mean_value_tenzo()
+    # tt.rewriting_file_json()
+    # tt.rewriting_file_log()
+    # tt.create_csv()
+    # tt.draw_plot()
+
+    #___________
+    gg = WorkToImages(path, tt.paths, calibration_param,[1,10])
+    gg.look(100)
+    # gg.main_function()
 
 if __name__ == "__main__":
     test()
-    # data = np.array([10, 20, 300, 30, 40, 500, 50, 60, 700])
-    # process_variance = 1.0  # Дисперсия процесса (варьируйте по необходимости)
-    # measurement_variance = 100.0  # Дисперсия измерений (варьируйте по необходимости)
-    #
-    # filtered_data = kalman_filter(data, process_variance, measurement_variance)
-    # print(filtered_data)
