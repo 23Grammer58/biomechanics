@@ -1,14 +1,33 @@
 import vtk
 
 
-def read_vtk(file_path):
+def read_vtk(file_path) -> vtk.vtkUnstructuredGrid:
+    """
+       Читает VTK файл и возвращает его как vtkUnstructuredGrid.
+
+       Args:
+           file_path (str): Путь к VTK файлу.
+
+       Returns:
+           vtk.vtkUnstructuredGrid: Считанный VTK файл в виде объекта vtkUnstructuredGrid.
+       """
     reader = vtk.vtkUnstructuredGridReader()
     reader.SetFileName(file_path)
     reader.Update()
     return reader.GetOutput()
 
 
-def process_vtk(file_path, dy):
+def process_vtk(file_path, dx, dy) -> vtk.vtkUnstructuredGrid:
+    """
+        Обрабатывает VTK файл, изменяя координаты точек и добавляя дополнительные данные.
+
+        Args:
+            file_path (str): Путь к исходному VTK файлу.
+            dy (float): Смещение по оси y для максимальных и минимальных y-координат.
+
+        Returns:
+            vtk.vtkUnstructuredGrid: Обработанный VTK файл в виде объекта vtkUnstructuredGrid.
+        """
     grid = read_vtk(file_path)
 
     points = grid.GetPoints()
@@ -19,18 +38,65 @@ def process_vtk(file_path, dy):
     max_y_points = []
     min_y_points = []
 
+
+    def find_bc():
+        da = 0.9
+        db = 1.15
+        a = b = 10
+        n = 5
+        r = 0.2
+        circle2cirlce = (a - (db + da) * 2) / (n - 1)
+
+        coords_x_down = [round(da + db + circle2cirlce * i, 4) for i in range(n)]
+        coords_y_down = n * [round(db - r, 4)]
+        coords_down = list(zip(coords_x_down, coords_y_down))
+
+        coords_y_up = n * [round(b - db + r, 4)]
+        coords_up = list(zip(coords_x_down, coords_y_up))
+
+        coords_x_left = n * [round(db - r, 4)]
+        coords_y_left = [round(da + db + circle2cirlce * i) for i in range(n)]
+        coords_left = list(zip(coords_x_left, coords_y_left))
+
+        coords_x_right = n * [round(a - db + r, 4)]
+        coords_right = list(zip(coords_x_right, coords_y_left))
+
+
+        # print(coords)
+        return coords_down, coords_up, coords_left, coords_right
+
+
+    bc_coords_down, bc_coords_up, bc_coords_left, bc_coords_right = find_bc()
+    #эту процедуру можно и нужно адаптировать для точек сетки rake.vtk
+    # for i in range(num_points):
+    #     x, y, z = points.GetPoint(i)
+    #     if y > max_y:
+    #         max_y = y
+    #         max_y_points = [i]
+    #     elif y == max_y:
+    #         max_y_points.append(i)
+    #     if y < min_y:
+    #         min_y = y
+    #         min_y_points = [i]
+    #     elif y == min_y:
+    #         min_y_points.append(i)
+
+    down_points = []
+    up_points = []
+    left_points = []
+    right_points = []
     for i in range(num_points):
         x, y, z = points.GetPoint(i)
-        if y > max_y:
-            max_y = y
-            max_y_points = [i]
-        elif y == max_y:
-            max_y_points.append(i)
-        if y < min_y:
-            min_y = y
-            min_y_points = [i]
-        elif y == min_y:
-            min_y_points.append(i)
+        x_r = round(x, 4)
+        y_r = round(y, 4)
+        if (x_r, y_r) in bc_coords_down:
+            down_points.append(i)
+        elif (x_r, y_r) in bc_coords_up:
+            up_points.append(i)
+        elif (x_r, y_r) in bc_coords_left:
+            left_points.append(i)
+        elif (x_r, y_r) in bc_coords_right:
+            right_points.append(i)
 
     new_points = vtk.vtkPoints()
     boundary_tags = vtk.vtkIntArray()
@@ -41,18 +107,38 @@ def process_vtk(file_path, dy):
     updated_coords.SetNumberOfComponents(3)
     updated_coords.SetNumberOfTuples(num_points)
 
+    # for i in range(num_points):
+    #     x, y, z = points.GetPoint(i)
+    #     new_points.InsertNextPoint(x, y, 0.0)  # Zeroing the z-coordinate
+    #     if i in max_y_points:
+    #         updated_coords.SetTuple3(i, x, y + dy, 0.0)  # Zeroing the z-coordinate
+    #         boundary_tags.InsertNextValue(15)
+    #     elif i in min_y_points:
+    #         updated_coords.SetTuple3(i, x, y - dy, 0.0)  # Zeroing the z-coordinate
+    #         boundary_tags.InsertNextValue(15)
+    #     else:
+    #         updated_coords.SetTuple3(i, x, y, 0.0)  # Zeroing the z-coordinate
+    #         boundary_tags.InsertNextValue(4)
+
     for i in range(num_points):
         x, y, z = points.GetPoint(i)
         new_points.InsertNextPoint(x, y, 0.0)  # Zeroing the z-coordinate
-        if i in max_y_points:
+        if i in up_points:
             updated_coords.SetTuple3(i, x, y + dy, 0.0)  # Zeroing the z-coordinate
             boundary_tags.InsertNextValue(15)
-        elif i in min_y_points:
+        elif i in down_points:
             updated_coords.SetTuple3(i, x, y - dy, 0.0)  # Zeroing the z-coordinate
+            boundary_tags.InsertNextValue(15)
+        elif i in right_points:
+            updated_coords.SetTuple3(i, x + dx, y, 0.0)  # Zeroing the z-coordinate
+            boundary_tags.InsertNextValue(15)
+        elif i in left_points:
+            updated_coords.SetTuple3(i, x - dx, y, 0.0)  # Zeroing the z-coordinate
             boundary_tags.InsertNextValue(15)
         else:
             updated_coords.SetTuple3(i, x, y, 0.0)  # Zeroing the z-coordinate
             boundary_tags.InsertNextValue(4)
+
 
     grid.SetPoints(new_points)
     grid.GetPointData().AddArray(boundary_tags)
@@ -85,7 +171,16 @@ def process_vtk(file_path, dy):
     return grid
 
 
-def write_vtk(grid, output_path):
+def write_vtk(grid: vtk.vtkUnstructuredGrid, output_path: str):
+
+    """
+       Записывает объект vtkUnstructuredGrid в VTK файл, удовлетворяющий требованиям из img/grid_vtk_pattern.vtk.
+       Также записываются дополнительные поля (ГУ, тип ГУ, толщина, стартовая конфигурация).
+
+       Args:
+           grid (vtk.vtkUnstructuredGrid): Обработанный VTK файл в виде объекта vtkUnstructuredGrid.
+           output_path (str): Путь для сохранения выходного VTK файла.
+    """
     num_points = grid.GetNumberOfPoints()
     num_cells = grid.GetNumberOfCells()
 
@@ -143,10 +238,13 @@ def write_vtk(grid, output_path):
             file.write(f'{f_thickness.GetValue(i)}\n')
 
 
-if __name__ =="__main__":
-    input_vtk_file = r'C:\Users\User\Documents\projects\study\meshes_course\gmsh\patch_with_all_tags.vtk'
-    output_vtk_file = r'C:\Users\User\PycharmProjects\pythonProject\meshes\biomech_school\test_rake.vtk'
-    dy = 5.0 # Example value for dy
-    grid = process_vtk(input_vtk_file, dy)
+if __name__ == "__main__":
+    input_vtk_file = r'C:\Users\User\PycharmProjects\pythonProject\meshes\biomech_school\meshes\rake.vtk'
+    output_vtk_file = r'C:\Users\User\PycharmProjects\pythonProject\meshes\biomech_school\meshes\rake_proc.vtk'
+
+    dx = 5.0 / 100
+    dy = 5.0 / 100
+
+    grid = process_vtk(input_vtk_file, dx, dy)
     write_vtk(grid, output_vtk_file)
 
