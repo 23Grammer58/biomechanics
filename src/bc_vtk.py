@@ -1,5 +1,6 @@
 import vtk
 
+p = 1
 
 def read_vtk(file_path) -> vtk.vtkUnstructuredGrid:
     """
@@ -47,18 +48,18 @@ def process_vtk(file_path, dx, dy) -> vtk.vtkUnstructuredGrid:
         r = 0.2
         circle2cirlce = (a - (db + da) * 2) / (n - 1)
 
-        coords_x_down = [round(da + db + circle2cirlce * i, 4) for i in range(n)]
-        coords_y_down = n * [round(db - r, 4)]
+        coords_x_down = [round(da + db + circle2cirlce * i, p) for i in range(n)]
+        coords_y_down = n * [round(db - r, p)]
         coords_down = list(zip(coords_x_down, coords_y_down))
 
-        coords_y_up = n * [round(b - db + r, 4)]
+        coords_y_up = n * [round(b - db + r, p)]
         coords_up = list(zip(coords_x_down, coords_y_up))
 
-        coords_x_left = n * [round(db - r, 4)]
+        coords_x_left = n * [round(db - r, p)]
         coords_y_left = [round(da + db + circle2cirlce * i) for i in range(n)]
         coords_left = list(zip(coords_x_left, coords_y_left))
 
-        coords_x_right = n * [round(a - db + r, 4)]
+        coords_x_right = n * [round(a - db + r, p)]
         coords_right = list(zip(coords_x_right, coords_y_left))
 
 
@@ -87,8 +88,8 @@ def process_vtk(file_path, dx, dy) -> vtk.vtkUnstructuredGrid:
     right_points = []
     for i in range(num_points):
         x, y, z = points.GetPoint(i)
-        x_r = round(x, 4)
-        y_r = round(y, 4)
+        x_r = round(x, p)
+        y_r = round(y, p)
         if (x_r, y_r) in bc_coords_down:
             down_points.append(i)
         elif (x_r, y_r) in bc_coords_up:
@@ -239,8 +240,8 @@ def write_vtk(grid: vtk.vtkUnstructuredGrid, output_path: str):
 
 
 if __name__ == "__main__":
-    input_vtk_file = r'C:\Users\User\PycharmProjects\pythonProject\meshes\biomech_school\meshes\rake.vtk'
-    output_vtk_file = r'C:\Users\User\PycharmProjects\pythonProject\meshes\biomech_school\meshes\rake_proc.vtk'
+    input_vtk_file = r'..\meshes\rake.vtk'
+    output_vtk_file = r'..\meshes\rake_proc.vtk'
 
     dx = 5.0 / 100
     dy = 5.0 / 100
